@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Duration, Utc};
-use rocksdb::{ColumnFamilyDescriptor, DB as RocksDb, Error as RocksDbError, Options,
-              compaction_filter::Decision};
+use rocksdb::{compaction_filter::Decision, ColumnFamilyDescriptor, Error as RocksDbError, Options,
+              DB as RocksDb};
 use serde::de::IgnoredAny;
 use serde::ser::Serialize;
 use serde_cbor;
