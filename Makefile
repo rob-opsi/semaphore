@@ -13,9 +13,9 @@ releasebuild:
 	CARGO_INCREMENTAL=0 cargo build --release --locked
 .PHONY: releasebuild
 
-dockerbuild:
-	@scripts/docker-build.sh
-.PHONY: dockerbuild
+releasebuild-docker:
+	@scripts/docker-build-linux.sh
+.PHONY: releasebuild-docker
 
 doc:
 	@cargo doc
@@ -49,5 +49,5 @@ format-check:
 .PHONY: format-check
 
 devserver:
-	@catflap -p 3000 -- cargo watch -x "run -- run"
+	@systemfd --no-pid -s http::3000 -- cargo watch -x "run -- run"
 .PHONY: devserver

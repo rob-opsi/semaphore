@@ -16,6 +16,7 @@ extern crate rand;
 extern crate rust_sodium;
 #[macro_use]
 extern crate semaphore_common;
+extern crate semaphore_persistence;
 extern crate sentry_types;
 extern crate serde;
 #[macro_use]

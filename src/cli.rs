@@ -1,7 +1,6 @@
 use std::env;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use clap::{ArgMatches, Shell};
 use dialoguer::{Confirmation, Select};
@@ -42,7 +41,7 @@ pub fn execute() -> Result<(), Error> {
         run(config, &matches)
     } else if let Some(matches) = matches.subcommand_matches("db") {
         if let Some(..) = matches.subcommand_matches("repair") {
-            Store::repair(Arc::new(config))?;
+            Store::repair(config.store_path())?;
             println!("Repair finished.");
         }
         Ok(())
@@ -241,7 +240,7 @@ pub fn generate_completions<'a>(matches: &ArgMatches<'a>) -> Result<(), Error> {
             _ => {
                 #[cfg(windows)]
                 {
-                    Shell::Powerhell
+                    Shell::PowerShell
                 }
                 #[cfg(not(windows))]
                 {

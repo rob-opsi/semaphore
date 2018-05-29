@@ -11,10 +11,12 @@ use serde::de::DeserializeOwned;
 use url::Url;
 use uuid::Uuid;
 
+use semaphore_common::ProjectId;
+use semaphore_persistence::{Cachable, Store, StoreError};
+
 use config::AortaConfig;
 use event::StoreChangeset;
 use query::{AortaQuery, GetProjectConfigQuery, QueryError, RequestManager};
-use semaphore_common::ProjectId;
 use upstream::UpstreamDescriptor;
 
 /// These are config values that the user can modify in the UI.
@@ -51,6 +53,12 @@ pub struct ProjectStateSnapshot {
     pub config: ProjectConfig,
     /// The project state's revision id.
     pub rev: Option<Uuid>,
+}
+
+impl Cachable for ProjectStateSnapshot {
+    fn cache_version() -> u32 {
+        1
+    }
 }
 
 /// A helper enum indicating the public key state.
@@ -161,6 +169,16 @@ impl ProjectState {
             request_manager: request_manager,
             last_event: RwLock::new(None),
         }
+    }
+
+    /// Tries to load a project state from the given store.
+    pub fn try_load(
+        project_id: ProjectId,
+        config: Arc<AortaConfig>,
+        request_manager: Arc<RequestManager>,
+        store: Arc<Store>,
+    ) -> Result<Option<ProjectState>, StoreError> {
+        Ok(None)
     }
 
     /// Adds a query that should be issued with the next heartbeat.

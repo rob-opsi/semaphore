@@ -246,12 +246,14 @@ pub struct Config {
     values: ConfigValues,
     credentials: Option<Credentials>,
     path: PathBuf,
+    store_path: PathBuf,
 }
 
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Config")
             .field("path", &self.path)
+            .field("store_path", &self.store_path)
             .field("values", &self.values)
             .finish()
     }
@@ -362,6 +364,7 @@ impl Config {
         let path = env::current_dir()
             .map(|x| x.join(path.as_ref()))
             .unwrap_or_else(|_| path.as_ref().to_path_buf());
+        let store_path = path.join("storage");
         Ok(Config {
             values: ConfigValues::load(&path)?,
             credentials: if fs::metadata(Credentials::path(&path)).is_ok() {
@@ -370,6 +373,7 @@ impl Config {
                 None
             },
             path,
+            store_path,
         })
     }
 
@@ -381,6 +385,11 @@ impl Config {
     /// Returns the filename of the config file.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Returns the path to the store.
+    pub fn store_path(&self) -> &Path {
+        &self.store_path
     }
 
     /// Dumps out a YAML string of the values.

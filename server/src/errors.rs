@@ -19,6 +19,10 @@ pub enum ServerErrorKind {
     #[fail(display = "listening failed")]
     ListenFailed,
 
+    /// A storage error ocurred.
+    #[fail(display = "aorta trove storage error ocurred")]
+    TroveStoreError,
+
     /// Spawning the trove governor failed.
     #[fail(display = "aorta trove governor spawn failed")]
     TroveGovernSpawnFailed,

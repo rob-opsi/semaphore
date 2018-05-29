@@ -1,12 +1,13 @@
-language: generic
+language: rust
 services:
   - docker
 
 cache:
-  cargo: true
   directories:
     - cabi/target
     - py/venv
+    - $HOME/.cargo
+    - $TRAVIS_BUILD_DIR/target
 
 git:
   depth: 1
@@ -15,54 +16,85 @@ branches:
   only:
     - master
 
+install: skip
 script: make $SUITE
 
 matrix:
   include:
     # Rust tests
-    - os: linux
-      env: SUITE=format-check
-      language: rust
+    - env: SUITE=format-check
       install: rustup component add rustfmt-preview
     - os: linux
       env: SUITE=cargotest
-      language: rust
+      install: cargo build --all
     - os: osx
       env: SUITE=cargotest
-      language: rust
+      install: cargo build --all
 
     # Python tests
-    # - os: linux
-    #   env: SUITE=pytest
-    # - os: osx
-    #   env: SUITE=pytest
+    - os: linux
+      env: SUITE=pytest
+    - os: osx
+      env: SUITE=pytest
 
     # Rust builds
-    # - os: linux
-    #   sudo: required
-    #   env: SUITE=dockerbuild BUILD_ARCH=i686
-    # - os: linux
-    #   sudo: required
-    #   env: SUITE=dockerbuild BUILD_ARCH=x86_64
-    # - os: osx
-    #   osx_image: xcode6.4
-    #   language: rust
-    #   env: SUITE=releasebuild
-    #   install: skip
+    - os: linux
+      language: generic
+      env:
+        - SUITE=releasebuild-docker
+        - BUILD_ARCH=x86_64
+      after_success:
+        - npm install -g @zeus-ci/cli
+        - zeus upload -t "application/octet-stream"
+                      -n semaphore-Linux-x86_64
+                      target/x86_64-unknown-linux-gnu/release/semaphore
+    - os: linux
+      language: generic
+      env:
+        - SUITE=releasebuild-docker
+        - BUILD_ARCH=i686
+      after_success:
+        - npm install -g @zeus-ci/cli
+        - zeus upload -t "application/octet-stream"
+                      -n semaphore-Linux-i686
+                      target/i686-unknown-linux-gnu/release/semaphore
+    - os: osx
+      osx_image: xcode7.3
+      env: SUITE=releasebuild
+      after_success:
+        - npm install -g @zeus-ci/cli
+        - zeus upload -t "application/octet-stream"
+                      -n semaphore-Darwin-x86_64
+                      target/release/semaphore
 
     # Python builds
     - os: linux
       sudo: required
       env: SUITE=manylinux BUILD_ARCH=i686
+      language: generic
+      after_success:
+        - npm install -g @zeus-ci/cli
+        - zeus upload -t "application/zip+wheel" py/dist/*
     - os: linux
       sudo: required
       env: SUITE=manylinux BUILD_ARCH=x86_64
-    # - os: osx
-    #   osx_image: xcode7.3
-    #   env: SUITE=wheel
-    # - os: linux
-    #   sudo: required
-    #   env: SUITE=sdist
+      language: generic
+      after_success:
+        - npm install -g @zeus-ci/cli
+        - zeus upload -t "application/zip+wheel" py/dist/*
+    - os: osx
+      osx_image: xcode7.3
+      env: SUITE=wheel
+      after_success:
+        - npm install -g @zeus-ci/cli
+        - zeus upload -t "application/zip+wheel" py/dist/*
+    - os: linux
+      sudo: required
+      env: SUITE=sdist
+      language: generic
+      after_success:
+        - npm install -g @zeus-ci/cli
+        - zeus upload -t "application/zip+wheel" py/dist/*
 
 notifications:
   webhooks:

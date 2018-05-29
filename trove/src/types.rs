@@ -17,6 +17,7 @@ use tokio_core::reactor::{Core, Handle, Remote};
 
 use semaphore_aorta::{AortaConfig, ApiErrorResponse, ApiRequest, ProjectState, RequestManager};
 use semaphore_common::ProjectId;
+use semaphore_persistence::{Store, StoreError};
 
 use auth::{spawn_authenticator, AuthError, AuthState};
 use heartbeat::spawn_heartbeat;
@@ -66,6 +67,7 @@ pub enum ApiError {
 #[derive(Debug)]
 pub struct TroveState {
     config: Arc<AortaConfig>,
+    store: Arc<Store>,
     states: RwLock<HashMap<ProjectId, Arc<ProjectState>>>,
     governor_tx: RwLock<Option<mpsc::UnboundedSender<GovernorEvent>>>,
     remote: RwLock<Option<Remote>>,
@@ -182,11 +184,12 @@ impl Trove {
     ///
     /// The config must already be stored in an Arc so it can be effectively
     /// shared around.
-    pub fn new(config: Arc<AortaConfig>) -> Trove {
+    pub fn new(config: Arc<AortaConfig>, store: Arc<Store>) -> Trove {
         Trove {
             state: Arc::new(TroveState {
-                states: RwLock::new(HashMap::new()),
                 config: config.clone(),
+                store: store,
+                states: RwLock::new(HashMap::new()),
                 governor_tx: RwLock::new(None),
                 remote: RwLock::new(None),
                 request_manager: Arc::new(RequestManager::new(config)),
@@ -302,6 +305,7 @@ impl TroveState {
 
     /// Returns a project state if it exists.
     pub fn get_project_state(&self, project_id: ProjectId) -> Option<Arc<ProjectState>> {
+        // TODO(mitsuhiko): read project state from store
         self.states.read().get(&project_id).map(|x| x.clone())
     }
 

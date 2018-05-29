@@ -50,18 +50,18 @@ pub type CurrentTroveState = State<Arc<TroveState>>;
 #[derive(Debug)]
 pub struct ProjectRequest<T: FromRequest<Arc<TroveState>> + 'static> {
     http_req: HttpRequest<Arc<TroveState>>,
-    payload: Option<<<T as FromRequest<Arc<TroveState>>>::Result as Future>::Item>,
+    payload: Option<T>,
 }
 
 impl<T: FromRequest<Arc<TroveState>> + 'static> ProjectRequest<T> {
     /// Returns the project identifier for this request.
     pub fn project_id(&self) -> ProjectId {
-        *self.http_req.extensions_ro().get().unwrap()
+        *self.http_req.extensions().get().unwrap()
     }
 
     /// Returns the auth info
     pub fn auth(&self) -> &Auth {
-        self.http_req.extensions_ro().get().unwrap()
+        self.http_req.extensions().get().unwrap()
     }
 
     /// Returns the current trove state.
@@ -78,9 +78,7 @@ impl<T: FromRequest<Arc<TroveState>> + 'static> ProjectRequest<T> {
     /// Extracts the embedded payload.
     ///
     /// This can only be called once.  Panics if there is no payload.
-    pub fn take_payload(
-        &mut self,
-    ) -> <<T as FromRequest<Arc<TroveState>>>::Result as Future>::Item {
+    pub fn take_payload(&mut self) -> T {
         self.payload.take().unwrap()
     }
 }
@@ -99,11 +97,7 @@ fn get_auth_from_request<S>(req: &HttpRequest<S>) -> Result<Auth, BadProjectRequ
     }
 
     // fall back to auth from url
-    Auth::from_pairs(
-        req.query()
-            .iter()
-            .map(|&(ref a, ref b)| -> (&str, &str) { (&a, &b) }),
-    ).map_err(BadProjectRequest::BadAuth)
+    Auth::from_querystring(req.query_string().as_bytes()).map_err(BadProjectRequest::BadAuth)
 }
 
 impl<T: FromRequest<Arc<TroveState>> + 'static> FromRequest<Arc<TroveState>> for ProjectRequest<T> {
@@ -130,13 +124,12 @@ impl<T: FromRequest<Arc<TroveState>> + 'static> FromRequest<Arc<TroveState>> for
         };
 
         Box::new(
-            <<<T as FromRequest<Arc<TroveState>>>::Result as Future>::Item>::from_request(
-                &req,
-                cfg,
-            ).map(move |payload| ProjectRequest {
-                http_req: req,
-                payload: Some(payload),
-            }),
+            T::from_request(&req, cfg)
+                .into()
+                .map(move |payload| ProjectRequest {
+                    http_req: req,
+                    payload: Some(payload),
+                }),
         )
     }
 }
@@ -153,7 +146,7 @@ fn parse_header_origin<T>(req: &HttpRequest<T>, header: header::HeaderName) -> O
 }
 
 fn event_meta_from_req(req: &HttpRequest<Arc<TroveState>>) -> EventMeta {
-    let auth: &Auth = req.extensions_ro().get().unwrap();
+    let auth: &Auth = req.extensions().get().unwrap();
     EventMeta {
         remote_addr: req.peer_addr().map(|sock_addr| sock_addr.ip()),
         sentry_client: auth.client_agent().map(|x| x.to_string()),
@@ -196,7 +189,7 @@ impl FromRequest<Arc<TroveState>> for IncomingEvent {
 
     #[inline]
     fn from_request(req: &HttpRequest<Arc<TroveState>>, _cfg: &Self::Config) -> Self::Result {
-        let auth: &Auth = req.extensions_ro().get().unwrap();
+        let auth: &Auth = req.extensions().get().unwrap();
         let max_payload = req.state().config().max_event_payload_size;
 
         // anything up to 7 is considered sentry v7
@@ -234,7 +227,7 @@ impl FromRequest<Arc<TroveState>> for IncomingForeignEvent {
 
     #[inline]
     fn from_request(req: &HttpRequest<Arc<TroveState>>, _cfg: &Self::Config) -> Self::Result {
-        let auth: &Auth = req.extensions_ro().get().unwrap();
+        let auth: &Auth = req.extensions().get().unwrap();
         let max_payload = req.state().config().max_event_payload_size;
 
         let meta = event_meta_from_req(req);

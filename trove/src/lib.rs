@@ -15,6 +15,7 @@ extern crate native_tls;
 extern crate parking_lot;
 extern crate semaphore_aorta;
 extern crate semaphore_common;
+extern crate semaphore_persistence;
 extern crate serde;
 extern crate serde_json;
 extern crate tokio_core;

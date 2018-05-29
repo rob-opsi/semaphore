@@ -8,8 +8,8 @@ extern crate serde_cbor;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate semaphore_config;
-
 mod store;
+mod traits;
 
 pub use store::*;
+pub use traits::*;
