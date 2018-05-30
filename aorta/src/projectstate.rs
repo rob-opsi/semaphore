@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use parking_lot::RwLock;
 use serde::de::DeserializeOwned;
 use url::Url;
@@ -112,6 +112,7 @@ pub struct ProjectState {
     requested_new_snapshot: AtomicBool,
     request_manager: Arc<RequestManager>,
     last_event: RwLock<Option<DateTime<Utc>>>,
+    store: Arc<Store>,
 }
 
 impl ProjectStateSnapshot {
@@ -159,6 +160,7 @@ impl ProjectState {
         project_id: ProjectId,
         config: Arc<AortaConfig>,
         request_manager: Arc<RequestManager>,
+        store: Arc<Store>,
     ) -> ProjectState {
         ProjectState {
             project_id: project_id,
@@ -168,6 +170,7 @@ impl ProjectState {
             requested_new_snapshot: AtomicBool::new(false),
             request_manager: request_manager,
             last_event: RwLock::new(None),
+            store: store,
         }
     }
 
@@ -178,7 +181,15 @@ impl ProjectState {
         request_manager: Arc<RequestManager>,
         store: Arc<Store>,
     ) -> Result<Option<ProjectState>, StoreError> {
-        Ok(None)
+        let rv = ProjectState::new(project_id, config, request_manager, store);
+        if let Some(value) = rv.store
+            .cache_get(&format!("project-snapshot:{}", project_id))?
+        {
+            *rv.current_snapshot.write() = Some(Arc::new(value));
+            Ok(Some(rv))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Adds a query that should be issued with the next heartbeat.
@@ -242,14 +253,14 @@ impl ProjectState {
 
         debug!("requesting updated project config for {}", self.project_id);
         self.add_query(GetProjectConfigQuery, move |ps, rv| -> Result<(), ()> {
+            // TODO: error handling
             if let Ok(snapshot_opt) = rv {
                 ps.requested_new_snapshot.store(false, Ordering::Relaxed);
                 match snapshot_opt {
-                    Some(snapshot) => ps.set_snapshot(snapshot),
-                    None => ps.set_missing_snapshot(),
+                    Some(snapshot) => ps.set_snapshot(snapshot).unwrap(),
+                    None => ps.set_missing_snapshot().unwrap(),
                 }
             } else {
-                // TODO: error handling
                 rv.unwrap();
             }
             Ok(())
@@ -367,9 +378,26 @@ impl ProjectState {
     }
 
     /// Sets a new snapshot.
-    pub fn set_snapshot(&self, new_snapshot: ProjectStateSnapshot) {
+    pub fn set_snapshot(&self, new_snapshot: ProjectStateSnapshot) -> Result<(), StoreError> {
         *self.current_snapshot.write() = Some(Arc::new(new_snapshot));
+        self.save()?;
         self.retry_pending_events();
+        Ok(())
+    }
+
+    /// Try to store the snapshot back.
+    fn save(&self) -> Result<(), StoreError> {
+        let key = format!("project-snapshot:{}", self.project_id);
+        if let Some(snapshot) = self.snapshot_opt() {
+            self.store.cache_set(
+                &key,
+                &snapshot as &ProjectStateSnapshot,
+                Some(Duration::minutes(60)),
+            )?;
+        } else {
+            self.store.cache_remove(&key)?;
+        }
+        Ok(())
     }
 
     /// Attempts to send all pending requests now.
@@ -414,7 +442,7 @@ impl ProjectState {
     /// This is used when the server indicates that this project does not actually
     /// exist or the relay has no permissions to work with it (these are both
     /// reported as the same thing to the relay).
-    pub fn set_missing_snapshot(&self) {
+    pub fn set_missing_snapshot(&self) -> Result<(), StoreError> {
         self.set_snapshot(ProjectStateSnapshot {
             last_fetch: Utc::now(),
             last_change: None,

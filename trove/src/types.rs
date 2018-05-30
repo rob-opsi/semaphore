@@ -17,7 +17,7 @@ use tokio_core::reactor::{Core, Handle, Remote};
 
 use semaphore_aorta::{AortaConfig, ApiErrorResponse, ApiRequest, ProjectState, RequestManager};
 use semaphore_common::ProjectId;
-use semaphore_persistence::{Store, StoreError};
+use semaphore_persistence::Store;
 
 use auth::{spawn_authenticator, AuthError, AuthState};
 use heartbeat::spawn_heartbeat;
@@ -305,7 +305,15 @@ impl TroveState {
 
     /// Returns a project state if it exists.
     pub fn get_project_state(&self, project_id: ProjectId) -> Option<Arc<ProjectState>> {
-        // TODO(mitsuhiko): read project state from store
+        // if we can read a project state from the cache, we use that one.
+        if let Ok(Some(state)) = ProjectState::try_load(
+            project_id,
+            self.config.clone(),
+            self.request_manager.clone(),
+            self.store.clone(),
+        ) {
+            self.states.write().insert(project_id, Arc::new(state));
+        }
         self.states.read().get(&project_id).map(|x| x.clone())
     }
 
@@ -325,6 +333,7 @@ impl TroveState {
                 project_id,
                 self.config.clone(),
                 self.request_manager.clone(),
+                self.store.clone(),
             );
             self.states.write().insert(project_id, Arc::new(state));
         }
