@@ -162,6 +162,20 @@ impl Store {
 
         Ok(ci)
     }
+
+    /// Clears the entire cache.
+    pub fn cache_clear(&self) -> Result<(), StoreError> {
+        let cf_handle = self.db.cf_handle("cache").unwrap();
+        let iter = self.db
+            .iterator_cf(cf_handle, IteratorMode::Start)
+            .map_err(StoreError::ReadError)?;
+        for (key, _) in iter {
+            self.db
+                .delete_cf(cf_handle, &key)
+                .map_err(StoreError::WriteError)?;
+        }
+        Ok(())
+    }
 }
 
 fn item_is_expired(value: &[u8]) -> bool {

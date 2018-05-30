@@ -49,6 +49,10 @@ pub fn execute() -> Result<(), Error> {
             println!("cached items: {}", ci.total);
             println!("expired items: {}", ci.expired);
             println!("approximate cache size: {}", ci.total_size);
+        } else if let Some(..) = matches.subcommand_matches("clear-cache") {
+            let store = Store::open(config.store_path())?;
+            store.cache_clear()?;
+            println!("Cache cleared.");
         }
         Ok(())
     } else {

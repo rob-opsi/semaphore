@@ -178,6 +178,7 @@ pub fn make_app() -> App<'static, 'static> {
                 .about("Manage the persistence subsystem.")
                 .setting(AppSettings::SubcommandRequiredElseHelp)
                 .subcommand(App::new("repair").about("Attempts to repair the stored data."))
-                .subcommand(App::new("show-cache").about("Dumps out infos about the cache.")),
+                .subcommand(App::new("show-cache").about("Dumps out infos about the cache."))
+                .subcommand(App::new("clear-cache").about("Clears the entire cache.")),
         )
 }
