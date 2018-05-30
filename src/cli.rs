@@ -43,6 +43,12 @@ pub fn execute() -> Result<(), Error> {
         if let Some(..) = matches.subcommand_matches("repair") {
             Store::repair(config.store_path())?;
             println!("Repair finished.");
+        } else if let Some(..) = matches.subcommand_matches("show-cache") {
+            let store = Store::open(config.store_path())?;
+            let ci = store.cache_info()?;
+            println!("cached items: {}", ci.total);
+            println!("expired items: {}", ci.expired);
+            println!("approximate cache size: {}", ci.total_size);
         }
         Ok(())
     } else {

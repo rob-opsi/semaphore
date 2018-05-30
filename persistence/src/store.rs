@@ -1,13 +1,21 @@
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Duration, Utc};
-use rocksdb::{compaction_filter::Decision, ColumnFamilyDescriptor, Error as RocksDbError, Options,
-              DB as RocksDb};
+use rocksdb::{compaction_filter::Decision, ColumnFamilyDescriptor, Error as RocksDbError,
+              IteratorMode, Options, DB as RocksDb};
 use serde::de::IgnoredAny;
 use serde::ser::Serialize;
 use serde_cbor;
 
 use traits::Cachable;
+
+/// Returns a summary of the cache.
+#[derive(Debug, Default)]
+pub struct CacheInfo {
+    pub total: usize,
+    pub expired: usize,
+    pub total_size: usize,
+}
 
 /// Represents an error from the store.
 #[derive(Debug, Fail)]
@@ -95,7 +103,10 @@ impl Store {
     }
 
     /// Looks up a value in the cache.
-    pub fn cache_get<C: Cachable>(&self, key: &str) -> Result<Option<C>, StoreError> {
+    ///
+    /// This is "unsafe" because it can return an error if the value is not
+    /// deserializing correctly.
+    pub fn cache_get_unsafe<C: Cachable>(&self, key: &str) -> Result<Option<C>, StoreError> {
         #[derive(Deserialize)]
         pub struct CacheItem<T>(Option<DateTime<Utc>>, u32, T);
         match self.db
@@ -123,8 +134,8 @@ impl Store {
     /// This is similar to `cache_get` but in case the value coming back from the cache
     /// does not correspond go the given format the value is dropped and `None` is
     /// returned instead of producing an error.
-    pub fn cache_get_safe<D: Cachable>(&self, key: &str) -> Result<Option<D>, StoreError> {
-        self.cache_get(key).or_else(|err| match err {
+    pub fn cache_get<D: Cachable>(&self, key: &str) -> Result<Option<D>, StoreError> {
+        self.cache_get_unsafe(key).or_else(|err| match err {
             StoreError::DeserializeError(..) => {
                 self.cache_remove(key).ok();
                 Ok(None)
@@ -132,22 +143,43 @@ impl Store {
             err => Err(err),
         })
     }
+
+    /// Returns information about the cache status.
+    pub fn cache_info(&self) -> Result<CacheInfo, StoreError> {
+        let mut ci: CacheInfo = Default::default();
+
+        let iter = self.db
+            .iterator_cf(self.db.cf_handle("cache").unwrap(), IteratorMode::Start)
+            .map_err(StoreError::ReadError)?;
+        for (key, value) in iter {
+            ci.total += 1;
+            if item_is_expired(&value) {
+                ci.expired += 1;
+            }
+            ci.total_size += key.len();
+            ci.total_size += value.len();
+        }
+
+        Ok(ci)
+    }
 }
 
-fn ttl_compaction_filter(_level: u32, _key: &[u8], value: &[u8]) -> Decision {
+fn item_is_expired(value: &[u8]) -> bool {
     #[derive(Deserialize)]
     pub struct TtlInfo(Option<DateTime<Utc>>, u32, IgnoredAny);
 
     serde_cbor::from_slice::<TtlInfo>(value)
         .ok()
         .and_then(|x| x.0)
-        .map_or(Decision::Keep, |value| {
-            if value < Utc::now() {
-                Decision::Remove
-            } else {
-                Decision::Keep
-            }
-        })
+        .map_or(true, |value| if value < Utc::now() { true } else { false })
+}
+
+fn ttl_compaction_filter(_level: u32, _key: &[u8], value: &[u8]) -> Decision {
+    if item_is_expired(value) {
+        Decision::Remove
+    } else {
+        Decision::Keep
+    }
 }
 
 fn get_column_family_options(family: FamilyType) -> Options {
