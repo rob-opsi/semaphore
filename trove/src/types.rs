@@ -306,7 +306,7 @@ impl TroveState {
     /// Returns a project state if it exists.
     pub fn get_project_state(&self, project_id: ProjectId) -> Option<Arc<ProjectState>> {
         // if we can read a project state from the cache, we use that one.
-        if let Ok(Some(state)) = ProjectState::try_load(
+        if let Some(state) = ProjectState::try_load(
             project_id,
             self.config.clone(),
             self.request_manager.clone(),

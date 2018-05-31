@@ -12,7 +12,7 @@ use url::Url;
 use uuid::Uuid;
 
 use semaphore_common::ProjectId;
-use semaphore_persistence::{Cachable, Store, StoreError};
+use semaphore_persistence::{Cachable, Store};
 
 use config::AortaConfig;
 use event::StoreChangeset;
@@ -189,15 +189,16 @@ impl ProjectState {
         config: Arc<AortaConfig>,
         request_manager: Arc<RequestManager>,
         store: Arc<Store>,
-    ) -> Result<Option<ProjectState>, StoreError> {
+    ) -> Option<ProjectState> {
         let rv = ProjectState::new(project_id, config, request_manager, store);
         if let Some(value) = rv.store
-            .cache_get(&format!("project-snapshot:{}", project_id))?
+            .cache_get(&format!("project-snapshot:{}", project_id))
+            .unwrap()
         {
             *rv.current_snapshot.write() = Some(Arc::new(value));
-            Ok(Some(rv))
+            Some(rv)
         } else {
-            Ok(None)
+            None
         }
     }
 
@@ -266,8 +267,8 @@ impl ProjectState {
             if let Ok(snapshot_opt) = rv {
                 ps.requested_new_snapshot.store(false, Ordering::Relaxed);
                 match snapshot_opt {
-                    Some(snapshot) => ps.set_snapshot(snapshot).unwrap(),
-                    None => ps.set_missing_snapshot().unwrap(),
+                    Some(snapshot) => ps.set_snapshot(snapshot),
+                    None => ps.set_missing_snapshot(),
                 }
             } else {
                 rv.unwrap();
@@ -396,26 +397,26 @@ impl ProjectState {
     }
 
     /// Sets a new snapshot.
-    pub fn set_snapshot(&self, new_snapshot: ProjectStateSnapshot) -> Result<(), StoreError> {
+    pub fn set_snapshot(&self, new_snapshot: ProjectStateSnapshot) {
         *self.current_snapshot.write() = Some(Arc::new(new_snapshot));
-        self.save()?;
+        self.save();
         self.retry_pending_events();
-        Ok(())
     }
 
     /// Try to store the snapshot back.
-    fn save(&self) -> Result<(), StoreError> {
+    fn save(&self) {
         let key = format!("project-snapshot:{}", self.project_id);
         if let Some(snapshot) = self.snapshot_opt() {
-            self.store.cache_set(
-                &key,
-                &snapshot as &ProjectStateSnapshot,
-                Some(Duration::minutes(60)),
-            )?;
+            self.store
+                .cache_set(
+                    &key,
+                    &snapshot as &ProjectStateSnapshot,
+                    Some(Duration::minutes(60)),
+                )
+                .unwrap();
         } else {
-            self.store.cache_remove(&key)?;
+            self.store.cache_remove(&key).unwrap();
         }
-        Ok(())
     }
 
     /// Attempts to send all pending requests now.
@@ -460,7 +461,7 @@ impl ProjectState {
     /// This is used when the server indicates that this project does not actually
     /// exist or the relay has no permissions to work with it (these are both
     /// reported as the same thing to the relay).
-    pub fn set_missing_snapshot(&self) -> Result<(), StoreError> {
+    pub fn set_missing_snapshot(&self) {
         self.set_snapshot(ProjectStateSnapshot {
             last_fetch: Utc::now(),
             last_change: None,
@@ -469,7 +470,7 @@ impl ProjectState {
             slug: None,
             config: Default::default(),
             rev: None,
-        })
+        });
     }
 }
 
