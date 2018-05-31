@@ -18,6 +18,7 @@ use config::AortaConfig;
 use event::StoreChangeset;
 use query::{AortaQuery, GetProjectConfigQuery, QueryError, RequestManager};
 use upstream::UpstreamDescriptor;
+use utils::instant_serde;
 
 /// These are config values that the user can modify in the UI.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -92,8 +93,9 @@ pub enum PublicKeyEventAction {
 }
 
 /// An event that was not sent yet.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct PendingStore {
+    #[serde(with = "instant_serde")]
     added_at: Instant,
     changeset: StoreChangeset,
 }

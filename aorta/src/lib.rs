@@ -26,6 +26,8 @@ extern crate tokio_core;
 extern crate url;
 extern crate url_serde;
 extern crate uuid;
+#[macro_use]
+extern crate lazy_static;
 
 mod api;
 mod auth;

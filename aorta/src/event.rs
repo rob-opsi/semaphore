@@ -29,7 +29,7 @@ pub struct EventMeta {
 }
 
 /// An enum that can hold various types of sentry events.
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum EventVariant {
     /// The version 7 event variant.
@@ -39,7 +39,7 @@ pub enum EventVariant {
 }
 
 /// Represents some payload not known to the relay
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum ForeignPayload {
     /// JSON formatted payload
@@ -49,7 +49,7 @@ pub enum ForeignPayload {
 }
 
 /// Represents an event unknown to the relay
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ForeignEvent {
     /// Store endpoint type.
     pub store_type: String,
@@ -100,7 +100,7 @@ impl fmt::Display for EventVariant {
 }
 
 /// The changeset for event stores.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct StoreChangeset {
     /// The public key that requested the store.
     pub public_key: String,
