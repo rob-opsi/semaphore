@@ -95,9 +95,16 @@ pub enum PublicKeyEventAction {
 /// An event that was not sent yet.
 #[derive(Debug, Serialize, Deserialize)]
 struct PendingStore {
+    id: Uuid,
     #[serde(with = "instant_serde")]
     added_at: Instant,
     changeset: StoreChangeset,
+}
+
+impl Cachable for PendingStore {
+    fn cache_version() -> u32 {
+        1
+    }
 }
 
 /// Gives access to the project's remote state.
@@ -342,10 +349,19 @@ impl ProjectState {
         match self.get_public_key_event_action(&changeset.public_key) {
             PublicKeyEventAction::Queue => {
                 debug!("{}#{} -> pending", self.project_id, changeset.event);
-                self.pending_stores.write().push(PendingStore {
+                let pending_store = PendingStore {
+                    id: changeset.event.id().unwrap_or_else(Uuid::new_v4),
                     added_at: Instant::now(),
                     changeset,
-                });
+                };
+                self.store
+                    .cache_set(
+                        &format!("pending-store:{}", pending_store.id),
+                        &pending_store,
+                        Some(Duration::minutes(5)),
+                    )
+                    .unwrap();
+                self.pending_stores.write().push(pending_store);
                 true
             }
             PublicKeyEventAction::Send => {
