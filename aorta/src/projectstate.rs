@@ -357,7 +357,7 @@ impl ProjectState {
                 };
                 self.store
                     .cache_set(
-                        &format!("pending-store:{}", pending_store.id),
+                        &format!("pending-store:{}:{}", self.project_id, pending_store.id),
                         &pending_store,
                         Some(Duration::minutes(5)),
                     )
@@ -399,12 +399,7 @@ impl ProjectState {
     /// Sets a new snapshot.
     pub fn set_snapshot(&self, new_snapshot: ProjectStateSnapshot) {
         *self.current_snapshot.write() = Some(Arc::new(new_snapshot));
-        self.save();
-        self.retry_pending_events();
-    }
 
-    /// Try to store the snapshot back.
-    fn save(&self) {
         let key = format!("project-snapshot:{}", self.project_id);
         if let Some(snapshot) = self.snapshot_opt() {
             self.store
@@ -417,6 +412,8 @@ impl ProjectState {
         } else {
             self.store.cache_remove(&key).unwrap();
         }
+
+        self.retry_pending_events();
     }
 
     /// Attempts to send all pending requests now.
@@ -431,13 +428,17 @@ impl ProjectState {
             let mut lock = self.pending_stores.write();
             let pending = mem::replace(&mut *lock, Vec::new());
 
+            let mut to_delete = vec![];
+
             lock.extend(pending.into_iter().filter_map(|pending_store| {
                 if pending_store.added_at.elapsed() > timeout {
+                    to_delete.push(pending_store.id);
                     return None;
                 }
 
                 match snapshot.get_public_key_status(&pending_store.changeset.public_key) {
                     PublicKeyStatus::Enabled => {
+                        to_delete.push(pending_store.id);
                         to_send.push(pending_store);
                         None
                     }
@@ -445,6 +446,12 @@ impl ProjectState {
                     PublicKeyStatus::Unknown => Some(pending_store),
                 }
             }));
+
+            for id in to_delete {
+                self.store
+                    .cache_remove(&format!("pending-store:{}:{}", self.project_id, id))
+                    .unwrap();
+            }
         }
 
         for pending_store in to_send {

@@ -32,7 +32,7 @@ fn store_event<I: FromRequest<Arc<TroveState>> + Into<StoreChangeset>>(
     let changeset = request.take_payload().into();
     let event_id = changeset.event.id();
 
-    metric!(counter(&format!("event.protocol.v{}", request.auth().version())) += 1);
+    metric!(counter("event.protocol.v{}", request.auth().version()) += 1);
 
     if request
         .get_or_create_project_state()

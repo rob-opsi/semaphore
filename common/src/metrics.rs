@@ -17,6 +17,8 @@ thread_local! {
 #[doc(hidden)]
 pub mod _pred {
     pub use cadence::prelude::*;
+    pub use std::io::Write;
+    pub use std::str::from_utf8_unchecked;
     pub use std::time::Instant;
 }
 
@@ -66,74 +68,93 @@ where
 /// Emits a metric.
 #[macro_export]
 macro_rules! metric {
+    // helper
+    (@format($var:ident, $($id:expr),*)) => {
+        let mut buf = [0u8; 512];
+        write!(&mut buf[..], $($id),*).unwrap();
+        let $var = unsafe {
+            from_utf8_unchecked(&buf[..]).trim_right_matches(&['\x00'][..])
+        };
+    };
+
     // counters
-    (counter($id:expr) += $value:expr) => {{
+    (counter($($id:expr),*) += $value:expr) => {{
         use $crate::metrics::_pred::*;
-        $crate::metrics::with_client(|client| { client.count($id, $value).ok(); })
+        metric!(@format(id, $($id),*));
+        $crate::metrics::with_client(|client| { client.count(id, $value).ok(); })
     }};
-    (counter($id:expr) += $value:expr, $($k:expr => $v:expr),*) => {{
+    (counter($($id:expr),*) += $value:expr, $($k:expr => $v:expr),*) => {{
         use $crate::metrics::_pred::*;
+        metric!(@format(id, $($id),*));
         $crate::metrics::with_client(|client| {
-            client.count_with_tags($id, $value)
+            client.count_with_tags(id, $value)
                 $(.with_tag($k, $v))*
                 .send();
         })
     }};
-    (counter($id:expr) -= $value:expr) => {{
+    (counter($($id:expr),*) -= $value:expr) => {{
         use $crate::metrics::_pred::*;
-        $crate::metrics::with_client(|client| { client.count($id, -$value).ok(); })
+        metric!(@format(id, $($id),*));
+        $crate::metrics::with_client(|client| { client.count(id, -$value).ok(); })
     }};
-    (counter($id:expr) -= $value:expr, $($k:expr => $v:expr),*) => {{
+    (counter($($id:expr),*) -= $value:expr, $($k:expr => $v:expr),*) => {{
         use $crate::metrics::_pred::*;
+        metric!(@format(id, $($id),*));
         $crate::metrics::with_client(|client| {
-            client.count_with_tags($id, -$value)
+            client.count_with_tags(id, -$value)
                 $(.with_tag($k, $v))*
                 .send();
         })
     }};
 
     // gauges
-    (gauge($id:expr) = $value:expr) => {{
+    (gauge($($id:expr),*) = $value:expr) => {{
         use $crate::metrics::_pred::*;
-        $crate::metrics::with_client(|client| { client.gauge($id, $value).ok(); })
+        metric!(@format(id, $($id),*));
+        $crate::metrics::with_client(|client| { client.gauge(id, $value).ok(); })
     }};
-    (gauge($id:expr) = $value:expr, $($k:expr => $v:expr),*) => {{
+    (gauge($($id:expr),*) = $value:expr, $($k:expr => $v:expr),*) => {{
         use $crate::metrics::_pred::*;
+        metric!(@format(id, $($id),*));
         $crate::metrics::with_client(|client| {
-            client.gauge_with_tags($id, $value)
+            client.gauge_with_tags(id, $value)
                 $(.with_tag($k, $v))*
                 .send();
         })
     }};
 
     // timers
-    (timer($id:expr) = $value:expr) => {{
+    (timer($($id:expr),*) = $value:expr) => {{
         use $crate::metrics::_pred::*;
-        $crate::metrics::with_client(|client| { client.time_duration($id, $value).ok(); })
+        metric!(@format(id, $($id),*));
+        $crate::metrics::with_client(|client| { client.time_duration(id, $value).ok(); })
     }};
-    (timer($id:expr) = $value:expr, $($k:expr => $v:expr),*) => {{
+    (timer($($id:expr),*) = $value:expr, $($k:expr => $v:expr),*) => {{
         use $crate::metrics::_pred::*;
+        metric!(@format(id, $($id),*));
         $crate::metrics::with_client(|client| {
-            client.time_duration_with_tags($id, $value)
+            client.time_duration_with_tags(id, $value)
                 $(.with_tag($k, $v))*
                 .send();
         })
     }};
-    (timer($id:expr), $block:block) => {{
+    (timer($($id:expr),*), $block:block) => {{
         use $crate::metrics::_pred::*;
         let now = Instant::now();
         let rv = {$block};
+        metric!(@format(id, $($id),*));
         $crate::metrics::with_client(|client| {
-            client.time_duration($id, now.elapsed()).ok();
+            client.time_duration(id, now.elapsed()).ok();
         });
         rv
     }};
-    (timer($id:expr), $block:block, $($k:expr => $v:expr)*) => {{
+    (timer($($id:expr),*), $block:block, $($k:expr => $v:expr)*) => {{
         use $crate::metrics::_pred::*;
         let now = Instant::now();
         let rv = {$block};
+        metric!(@format(id, $($id),*));
         $crate::metrics::with_client(|client| {
-            client.time_duration_with_tags($id, now.elapsed())
+            client.time_duration_with_tags(id, now.elapsed())
                 $(.with_tag($k, $v))*
                 .send();
         });
